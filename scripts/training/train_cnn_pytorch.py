@@ -7,6 +7,20 @@ PyTorch实现的CNN模型用于MNIST手写数字识别
 3. 将训练、测试循环封装为函数，代码结构更清晰；
 4. 使用命令行参数 argparse 方便调整超参数（学习率、batch_size、epoch 数等）；
 5. 支持 GPU / CPU 自动选择，并在 GPU 上可选使用自动混合精度（AMP）加速。
+
+# 训练CNN模型（默认）
+python train_cnn_pytorch.py --model-type cnn --batch-size 100 --epochs 10
+
+# 训练MLP模型
+python train_cnn_pytorch.py --model-type mlp --batch-size 100 --epochs 10
+
+# 自定义保存路径
+python train_cnn_pytorch.py --model-type mlp --model-save-path ./my_mlp_model.pt
+# 其他参数
+--lr 0.001
+--dropout 0.2
+--num-workers 0   （在 Windows 或 CPU 机器上建议设为 0）
+--no-amp          （在只用 CPU 训练时建议加上，关闭 AMP）
 """
 
 import argparse
@@ -49,6 +63,7 @@ class Config:
     # 训练设置
     SEED = 42
     MODEL_SAVE_PATH = "../../models/cnn_pytorch.pt"
+    MLP_MODEL_SAVE_PATH = "../../models/mlp_pytorch.pt"
     
     # 设备设置
     DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -57,7 +72,7 @@ class Config:
 
 class CNN(nn.Module):
     """
-    CNN模型：用于MNIST手写数字识别
+    CNN模型：用于Fashion-MNIST数据集
     
     结构说明：
         第一层卷积：5x5卷积核，1个输入通道，32个输出通道
@@ -147,6 +162,95 @@ class CNN(nn.Module):
         
         # 全连接层2（输出层）
         x = self.fc2(x)  # [batch, 1024] -> [batch, 10]
+        return x
+
+
+class MLP(nn.Module):
+    """
+    MLP模型：用于Fashion-MNIST数据集
+    
+    结构说明：
+        全连接层1：28*28 -> 512 + ReLU + Dropout
+        全连接层2：512 -> 256 + ReLU + Dropout
+        全连接层3：256 -> 128 + ReLU + Dropout
+        全连接层4：128 -> 10（输出层）
+    
+    参数说明：
+        dropout: Dropout概率，用于缓解过拟合
+    """
+    
+    def __init__(self, dropout: float = Config.DROPOUT):
+        """
+        初始化MLP模型
+        
+        Args:
+            dropout: Dropout概率，默认0.2
+        """
+        super().__init__()
+        # 全连接层1：28*28 -> 512
+        self.fc1 = nn.Linear(28 * 28, 512)
+        self.relu1 = nn.ReLU(inplace=True)
+        # Dropout层：减少过拟合
+        self.dropout1 = nn.Dropout(p=dropout)
+        
+        # 全连接层2：512 -> 256
+        self.fc2 = nn.Linear(512, 256)
+        self.relu2 = nn.ReLU(inplace=True)
+        # Dropout层：减少过拟合
+        self.dropout2 = nn.Dropout(p=dropout)
+        
+        # 全连接层3：256 -> 128
+        self.fc3 = nn.Linear(256, 128)
+        self.relu3 = nn.ReLU(inplace=True)
+        # Dropout层：减少过拟合
+        self.dropout3 = nn.Dropout(p=dropout)
+        
+        # 全连接层4：128 -> 10（输出层）
+        self.fc4 = nn.Linear(128, Config.NUM_CLASSES)
+        
+        # 自定义参数初始化
+        self._reset_parameters()
+    
+    def _reset_parameters(self):
+        """
+        对网络中的线性层使用合适的初始化方法，
+        使得训练更加稳定。
+        """
+        for module in self.modules():
+            if isinstance(module, nn.Linear):
+                nn.init.kaiming_normal_(module.weight, nonlinearity="relu")
+                nn.init.constant_(module.bias, 0.0)
+    
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        前向传播函数
+        
+        Args:
+            x: 输入张量，形状为 (batch_size, 1, 28, 28)
+            
+        Returns:
+            输出logits，形状为 (batch_size, 10)
+        """
+        # 展平输入
+        x = x.view(-1, 28 * 28)  # [batch, 1, 28, 28] -> [batch, 784]
+        
+        # 全连接层1
+        x = self.fc1(x)  # [batch, 784] -> [batch, 512]
+        x = self.relu1(x)
+        x = self.dropout1(x)  # Dropout训练时使用
+        
+        # 全连接层2
+        x = self.fc2(x)  # [batch, 512] -> [batch, 256]
+        x = self.relu2(x)
+        x = self.dropout2(x)  # Dropout训练时使用
+        
+        # 全连接层3
+        x = self.fc3(x)  # [batch, 256] -> [batch, 128]
+        x = self.relu3(x)
+        x = self.dropout3(x)  # Dropout训练时使用
+        
+        # 全连接层4（输出层）
+        x = self.fc4(x)  # [batch, 128] -> [batch, 10]
         return x
 
 
@@ -355,16 +459,34 @@ def create_model(
     device: torch.device = Config.DEVICE
 ) -> nn.Module:
     """
-    创建并初始化模型
+    创建并初始化CNN模型
     
     Args:
         dropout: Dropout概率
         device: 计算设备
         
     Returns:
-        初始化后的模型
+        初始化后的CNN模型
     """
     model = CNN(dropout=dropout).to(device)
+    return model
+
+
+def create_mlp_model(
+    dropout: float = Config.DROPOUT,
+    device: torch.device = Config.DEVICE
+) -> nn.Module:
+    """
+    创建并初始化MLP模型
+    
+    Args:
+        dropout: Dropout概率
+        device: 计算设备
+        
+    Returns:
+        初始化后的MLP模型
+    """
+    model = MLP(dropout=dropout).to(device)
     return model
 
 
@@ -418,8 +540,13 @@ def parse_args() -> argparse.Namespace:
     使用 argparse 从命令行解析超参数，方便在终端中灵活调整
     
     常用参数示例：
-        --batch-size 100
-        --epochs 10
+        # 训练CNN模型（默认）
+        python train_cnn_pytorch.py --model-type cnn --batch-size 100 --epochs 10
+        
+        # 训练MLP模型
+        python train_cnn_pytorch.py --model-type mlp --batch-size 100 --epochs 10
+        
+        # 其他参数
         --lr 0.0001
         --dropout 0.2
         --num-workers 0   （在 Windows 或 CPU 机器上建议设为 0）
@@ -428,7 +555,16 @@ def parse_args() -> argparse.Namespace:
     Returns:
         解析后的命令行参数
     """
-    parser = argparse.ArgumentParser(description="PyTorch版本MNIST卷积神经网络")
+    parser = argparse.ArgumentParser(description="PyTorch版本MNIST模型训练（支持CNN和MLP）")
+    
+    # 模型类型
+    parser.add_argument(
+        "--model-type",
+        type=str,
+        choices=["cnn", "mlp"],
+        default="cnn",
+        help="模型类型：cnn（卷积神经网络）或 mlp（多层感知机），默认为cnn"
+    )
     
     # 数据集目录
     parser.add_argument(
@@ -455,8 +591,8 @@ def parse_args() -> argparse.Namespace:
     # 训练设置
     parser.add_argument("--seed", type=int, default=Config.SEED,
                        help="随机数种子，保证可复现性")
-    parser.add_argument("--model-save-path", type=str, default=Config.MODEL_SAVE_PATH,
-                       help="模型保存路径")
+    parser.add_argument("--model-save-path", type=str, default=None,
+                       help="模型保存路径（默认根据模型类型自动选择）")
     
     # AMP设置
     parser.add_argument(
@@ -492,6 +628,7 @@ def print_config(args: argparse.Namespace, device: torch.device) -> None:
     print("=" * 60)
     print("训练配置信息")
     print("=" * 60)
+    print(f"模型类型: {args.model_type.upper()}")
     print(f"使用设备: {device}")
     print(f"数据集目录: {args.data_dir}")
     print(f"批次大小: {args.batch_size}")
@@ -537,9 +674,19 @@ def main():
         print(f"错误: {e}")
         return
     
+    # 根据模型类型选择保存路径
+    if args.model_save_path is None:
+        if args.model_type == "cnn":
+            args.model_save_path = Config.MODEL_SAVE_PATH
+        else:
+            args.model_save_path = Config.MLP_MODEL_SAVE_PATH
+    
     # 创建模型
-    print("\n正在创建模型...")
-    model = create_model(dropout=args.dropout, device=device)
+    print(f"\n正在创建{args.model_type.upper()}模型...")
+    if args.model_type == "cnn":
+        model = create_model(dropout=args.dropout, device=device)
+    else:
+        model = create_mlp_model(dropout=args.dropout, device=device)
     
     # 创建损失函数和优化器
     criterion = nn.CrossEntropyLoss()
