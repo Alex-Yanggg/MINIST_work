@@ -4,7 +4,7 @@ import os
 from PIL import Image
 
 # 配置参数
-INPUT_DIR = "../../data/user_samples"  # 原始手写图片存放目录
+INPUT_DIR = "../../data/user_samples"  # 原始衣物图片存放目录
 OUTPUT_DIR = "../../data/user_samples/processed"  # 处理后数据集输出目录
 TARGET_SIZE = (28, 28)  # 目标图像尺寸（MNIST标准）
 THRESHOLD_VALUE = 127  # 二值化阈值

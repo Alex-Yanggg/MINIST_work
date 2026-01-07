@@ -1,5 +1,5 @@
 """
-PyTorch实现的CNN模型用于MNIST手写数字识别
+PyTorch实现的CNN模型用于MNIST衣物识别
 
 特性：
 1. 使用 nn.Module 封装网络结构，便于复用与保存模型；

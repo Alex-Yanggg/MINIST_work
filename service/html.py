@@ -99,7 +99,7 @@ HTML = """
   </style>
 </head>
 <body>
-  <h2>MNIST 手写数字预测服务</h2>
+  <h2>Fashion-MNIST 衣物预测服务</h2>
   <div class="card">
     <form id="predictForm" enctype="multipart/form-data">
       <div class="row">
