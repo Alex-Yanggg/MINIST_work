@@ -25,7 +25,7 @@ class Config:
     
     # 训练超参数
     BATCH_SIZE = 100
-    EPOCHS = 10
+    EPOCHS = 1
     LEARNING_RATE = 1e-4
     DROPOUT = 0.2
     
