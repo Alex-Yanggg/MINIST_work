@@ -157,9 +157,9 @@ def visualize_predictions(images: List[Tuple[str, int, Image.Image]],
         results: [(真实标签, 预测标签, 置信度), ...]
         save_path: 保存路径
     """
-    fig, axes = plt.subplots(2, 2, figsize=(8, 8), facecolor='#808080')
-    fig.suptitle('MLP-Fashion-MNIST', fontsize=24, fontweight='bold', 
-                 color='white', y=0.97)
+    fig, axes = plt.subplots(2, 2, figsize=(12, 12), facecolor='#f8f9fa')
+    fig.suptitle('MLP-Fashion-MNIST', fontsize=20, fontweight='bold', 
+                 color='#212529', y=0.97)
     
     for idx, ((img_path, true_label, pil_img), (true, pred, conf)) in enumerate(zip(images, results)):
         row = idx // 2
@@ -169,7 +169,8 @@ def visualize_predictions(images: List[Tuple[str, int, Image.Image]],
         is_correct = (true == pred)
         # 蓝色表示正确，红色表示错误
         border_color = '#3498db' if is_correct else '#e74c3c'
-        text_color = '#3498db' if is_correct else '#e74c3c'
+        bg_color = '#ebf5fb' if is_correct else '#fadbd8'
+        text_color = '#2980b9' if is_correct else '#c0392b'
         status_text = '✓' if is_correct else '✗'
         
         ax.set_facecolor('#ffffff')
@@ -181,18 +182,18 @@ def visualize_predictions(images: List[Tuple[str, int, Image.Image]],
             spine.set_edgecolor(border_color)
             spine.set_linewidth(5)
         
-        # 信息显示在图片上方，字体更大
+        # 信息显示在图片上方
         title_text = f'Pred: {pred}  Target: {true}  {status_text}'
-        ax.set_title(title_text, fontsize=18, fontweight='bold', 
-                    color=text_color, pad=10)
+        ax.set_title(title_text, fontsize=13, fontweight='bold', 
+                    color=text_color, pad=8)
         
-        # 置信度显示在图片下方，字体更大
+        # 置信度显示在图片下方
         conf_text = f'Confidence: {conf:.1%}'
         ax.text(0.5, -0.08, conf_text, transform=ax.transAxes, 
-               fontsize=14, color='#ffffff', ha='center', va='top', fontweight='bold')
+               fontsize=10, color='#7f8c8d', ha='center', va='top')
     
     plt.tight_layout(rect=[0, 0, 1, 0.96])
-    plt.savefig(save_path, dpi=150, bbox_inches='tight', facecolor='#808080')
+    plt.savefig(save_path, dpi=150, bbox_inches='tight', facecolor='#f8f9fa')
     plt.close()
     print(f"可视化结果已保存到: {save_path}")
 
