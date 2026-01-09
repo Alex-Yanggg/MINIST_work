@@ -55,10 +55,7 @@ class MLP(nn.Module):
     MLP模型：用于Fashion-MNIST数据集
     
     结构说明：
-        全连接层1：28*28 -> 512 + ReLU + Dropout
-        全连接层2：512 -> 256 + ReLU + Dropout
-        全连接层3：256 -> 128 + ReLU + Dropout
-        全连接层4：128 -> 10（输出层）
+        全连接层1：28*28 -> 512 -> 128 -> 64 -> 10（输出层）
     
     参数说明：
         dropout: Dropout概率，用于缓解过拟合
@@ -78,20 +75,20 @@ class MLP(nn.Module):
         # Dropout层：减少过拟合
         self.dropout1 = nn.Dropout(p=dropout)
         
-        # 全连接层2：512 -> 256
-        self.fc2 = nn.Linear(512, 256)
+        # 全连接层2：512 -> 128
+        self.fc2 = nn.Linear(512, 128)
         self.relu2 = nn.ReLU(inplace=True)
         # Dropout层：减少过拟合
         self.dropout2 = nn.Dropout(p=dropout)
         
-        # 全连接层3：256 -> 128
-        self.fc3 = nn.Linear(256, 128)
+        # 全连接层3：128 -> 64
+        self.fc3 = nn.Linear(128, 64)
         self.relu3 = nn.ReLU(inplace=True)
         # Dropout层：减少过拟合
         self.dropout3 = nn.Dropout(p=dropout)
         
-        # 全连接层4：128 -> 10（输出层）
-        self.fc4 = nn.Linear(128, Config.NUM_CLASSES)
+        # 全连接层4：64 -> 10（输出层）
+        self.fc4 = nn.Linear(64, Config.NUM_CLASSES)
         
         # 自定义参数初始化
         self._reset_parameters()
