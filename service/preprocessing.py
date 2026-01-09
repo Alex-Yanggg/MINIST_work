@@ -82,7 +82,7 @@ def robust_mnist_preprocess(
 
         contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         if not contours:
-            raise ValueError("未找到数字轮廓")
+            raise ValueError("未找到轮廓")
         largest_contour = max(contours, key=cv2.contourArea)
         x, y, w, h = cv2.boundingRect(largest_contour)
         cropped = binary[y : y + h, x : x + w]

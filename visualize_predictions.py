@@ -66,7 +66,7 @@ def get_data_transforms() -> transforms.Compose:
     ])
 
 
-def load_test_images(test_dir: str = "data/test", num_samples: int = 9) -> List[Tuple[str, int, Image.Image]]:
+def load_test_images(test_dir: str = "data/test", num_samples: int = 4) -> List[Tuple[str, int, Image.Image]]:
     """
     从测试集中随机加载图片
     
@@ -150,41 +150,45 @@ def visualize_predictions(images: List[Tuple[str, int, Image.Image]],
                          results: List[Tuple[int, int, float]],
                          save_path: str = "predictions_visualization.png"):
     """
-    以9宫格形式可视化预测结果
+    以2x2形式可视化预测结果
     
     Args:
         images: [(图片路径, 真实标签, PIL图片对象), ...]
         results: [(真实标签, 预测标签, 置信度), ...]
         save_path: 保存路径
     """
-    fig, axes = plt.subplots(3, 3, figsize=(12, 12))
-    fig.suptitle('MLP-Fashion-MNIST', fontsize=16, fontweight='bold')
+    fig, axes = plt.subplots(2, 2, figsize=(10, 10), facecolor='white')
+    fig.suptitle('MLP-Fashion-MNIST', fontsize=18, fontweight='bold', color='#2c3e50')
     
     for idx, ((img_path, true_label, pil_img), (true, pred, conf)) in enumerate(zip(images, results)):
-        row = idx // 3
-        col = idx % 3
+        row = idx // 2
+        col = idx % 2
         ax = axes[row, col]
         
-        # 显示图片
+        is_correct = (true == pred)
+        border_color = '#27ae60' if is_correct else '#e74c3c'
+        bg_color = '#d5f4e6' if is_correct else '#fadbd8'
+        text_color = '#1e8449' if is_correct else '#c0392b'
+        status_text = '√' if is_correct else 'X'
+        
+        ax.set_facecolor(bg_color)
         ax.imshow(pil_img, cmap='gray')
         ax.axis('off')
         
-        # 判断预测是否正确
-        is_correct = (true == pred)
-        color = 'green' if is_correct else 'red'
-        
-        # 添加标题：显示预测值和真实值
-        title = f'Pred: {pred} | Target: {true}\nConf: {conf:.2%}'
-        ax.set_title(title, fontsize=10, color=color, fontweight='bold')
-        
-        # 添加边框颜色标识
         for spine in ax.spines.values():
-            spine.set_edgecolor(color)
-            spine.set_linewidth(3)
+            spine.set_edgecolor(border_color)
+            spine.set_linewidth(4)
+        
+        info_text = f'{status_text} Pred: {pred}\nTarget: {true}\nConf: {conf:.1%}'
+        ax.text(0.5, -0.1, info_text, transform=ax.transAxes, 
+               fontsize=11, fontweight='bold', color=text_color,
+               ha='center', va='top',
+               bbox=dict(boxstyle='round,pad=0.5', facecolor='white', 
+                        edgecolor=border_color, linewidth=2, alpha=0.9))
     
     plt.tight_layout()
-    plt.savefig(save_path, dpi=150, bbox_inches='tight')
-    plt.close()  # 关闭图形以释放内存
+    plt.savefig(save_path, dpi=150, bbox_inches='tight', facecolor='white')
+    plt.close()
     print(f"可视化结果已保存到: {save_path}")
 
 
@@ -208,9 +212,9 @@ def main():
     # 准备数据变换
     transform = get_data_transforms()
     
-    # 从测试集中随机选择9张图片
+    # 从测试集中随机选择4张图片
     print("\n正在从测试集中加载图片...")
-    test_images = load_test_images("data/test", num_samples=9)
+    test_images = load_test_images("data/test", num_samples=4)
     print(f"成功加载 {len(test_images)} 张图片")
     
     # 进行预测

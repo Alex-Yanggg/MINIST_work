@@ -7,7 +7,7 @@ from typing import Dict, Tuple
 import torch
 
 
-from train_cnn import Config as CNNConfig, CNN
+from train_cnn_pytorch import Config as CNNConfig, CNN
 from train_mlp import Config as MLPConfig, MLP
 
 def load_models(device: torch.device) -> Dict[str, Tuple[torch.nn.Module, str]]:
