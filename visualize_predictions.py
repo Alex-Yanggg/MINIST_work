@@ -66,7 +66,7 @@ def get_data_transforms() -> transforms.Compose:
     ])
 
 
-def load_test_images(test_dir: str = "data/test", num_samples: int = 4) -> List[Tuple[str, int, Image.Image]]:
+def load_test_images(test_dir: str = "data/test", num_samples: int = 9) -> List[Tuple[str, int, Image.Image]]:
     """
     从测试集中随机加载图片
     
@@ -150,35 +150,61 @@ def visualize_predictions(images: List[Tuple[str, int, Image.Image]],
                          results: List[Tuple[int, int, float]],
                          save_path: str = "predictions_visualization.png"):
     """
-    以2x2形式可视化预测结果
+    以9宫格形式可视化预测结果（现代风格）
     
     Args:
         images: [(图片路径, 真实标签, PIL图片对象), ...]
         results: [(真实标签, 预测标签, 置信度), ...]
         save_path: 保存路径
     """
-    fig, axes = plt.subplots(2, 2, figsize=(10, 10), facecolor='white')
-    fig.suptitle('MLP-Fashion-MNIST', fontsize=18, fontweight='bold', color='#2c3e50')
+    # 设置现代风格
+    try:
+        plt.style.use('seaborn-v0_8-darkgrid')
+    except:
+        try:
+            plt.style.use('seaborn-darkgrid')
+        except:
+            plt.style.use('default')
+    
+    fig = plt.figure(figsize=(14, 14), facecolor='white')
+    gs = fig.add_gridspec(3, 3, hspace=0.3, wspace=0.3, left=0.05, right=0.95, top=0.93, bottom=0.05)
+    
+    fig.suptitle('MLP-Fashion-MNIST', fontsize=20, fontweight='bold', 
+                 color='#2c3e50', y=0.98)
     
     for idx, ((img_path, true_label, pil_img), (true, pred, conf)) in enumerate(zip(images, results)):
-        row = idx // 2
-        col = idx % 2
-        ax = axes[row, col]
+        row = idx // 3
+        col = idx % 3
+        ax = fig.add_subplot(gs[row, col])
         
+        # 判断预测是否正确
         is_correct = (true == pred)
-        border_color = '#27ae60' if is_correct else '#e74c3c'
-        bg_color = '#d5f4e6' if is_correct else '#fadbd8'
-        text_color = '#1e8449' if is_correct else '#c0392b'
-        status_text = '√' if is_correct else 'X'
         
+        # 现代配色方案
+        if is_correct:
+            border_color = '#27ae60'  # 绿色
+            bg_color = '#d5f4e6'      # 浅绿背景
+            text_color = '#1e8449'    # 深绿色文字
+            status_text = '√'
+        else:
+            border_color = '#e74c3c'  # 红色
+            bg_color = '#fadbd8'      # 浅红背景
+            text_color = '#c0392b'    # 深红色文字
+            status_text = 'X'
+        
+        # 设置背景色
         ax.set_facecolor(bg_color)
-        ax.imshow(pil_img, cmap='gray')
+        
+        # 显示图片（添加一些边距效果）
+        ax.imshow(pil_img, cmap='gray', aspect='auto')
         ax.axis('off')
         
+        # 添加圆角边框效果（通过设置patch）
         for spine in ax.spines.values():
             spine.set_edgecolor(border_color)
             spine.set_linewidth(4)
         
+        # 添加信息文本框
         info_text = f'{status_text} Pred: {pred}\nTarget: {true}\nConf: {conf:.1%}'
         ax.text(0.5, -0.1, info_text, transform=ax.transAxes, 
                fontsize=11, fontweight='bold', color=text_color,
@@ -186,9 +212,8 @@ def visualize_predictions(images: List[Tuple[str, int, Image.Image]],
                bbox=dict(boxstyle='round,pad=0.5', facecolor='white', 
                         edgecolor=border_color, linewidth=2, alpha=0.9))
     
-    plt.tight_layout()
-    plt.savefig(save_path, dpi=150, bbox_inches='tight', facecolor='white')
-    plt.close()
+    plt.savefig(save_path, dpi=150, bbox_inches='tight', facecolor='white', edgecolor='none')
+    plt.close()  # 关闭图形以释放内存
     print(f"可视化结果已保存到: {save_path}")
 
 
@@ -212,9 +237,9 @@ def main():
     # 准备数据变换
     transform = get_data_transforms()
     
-    # 从测试集中随机选择4张图片
+    # 从测试集中随机选择9张图片
     print("\n正在从测试集中加载图片...")
-    test_images = load_test_images("data/test", num_samples=4)
+    test_images = load_test_images("data/test", num_samples=9)
     print(f"成功加载 {len(test_images)} 张图片")
     
     # 进行预测
