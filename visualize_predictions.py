@@ -8,7 +8,7 @@ import os
 import random
 import time
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 import torch
 import torch.nn as nn
@@ -22,31 +22,65 @@ sys.path.append(str(Path(__file__).parent / "scripts" / "training"))
 from train_mlp import MLP, Config
 
 
-def load_mlp_model(model_path: str = "models/mlp_pytorch.pt", device: torch.device = None) -> nn.Module:
+# 可视化配置常量
+class VisualizationConfig:
+    """可视化配置类"""
+    # 布局设置
+    GRID_SIZE = (2, 2)  # 2x2网格
+    FIGURE_SIZE = (10, 10)  # 图像尺寸
+    DPI = 200  # 分辨率
+    
+    # 颜色配置
+    BACKGROUND_COLOR = '#ffffff'  # 白色背景
+    CORRECT_COLOR = '#2ecc71'  # 正确预测颜色（绿色）
+    ERROR_COLOR = '#e74c3c'  # 错误预测颜色（红色）
+    TEXT_COLOR = '#2c3e50'  # 主要文字颜色
+    SUBTEXT_COLOR = '#7f8c8d'  # 次要文字颜色
+    
+    # 字体设置
+    TITLE_FONT_SIZE = 22
+    SUBTITLE_FONT_SIZE = 16
+    CONFIDENCE_FONT_SIZE = 13
+    
+    # 边框设置
+    BORDER_WIDTH = 2
+    BORDER_PADDING = 0.02
+
+
+def load_mlp_model(model_path: str = "models/mlp_pytorch.pt", 
+                   device: Optional[torch.device] = None) -> nn.Module:
     """
-    加载训练好的MLP模型
+    加载训练好的MLP模型权重
+    
+    该函数会创建MLP模型实例，并从指定路径加载训练好的权重参数。
+    如果模型文件不存在，将抛出FileNotFoundError异常。
     
     Args:
-        model_path: 模型权重文件路径
-        device: 计算设备，如果为None则自动选择
+        model_path: 模型权重文件的路径，默认为 "models/mlp_pytorch.pt"
+        device: 计算设备（CPU或GPU），如果为None则自动检测并使用可用设备
         
     Returns:
-        加载好权重的MLP模型
+        加载好权重的MLP模型，已设置为评估模式（eval mode）
+        
+    Raises:
+        FileNotFoundError: 当模型文件不存在时抛出
     """
+    # 自动检测设备
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
-    # 创建模型
+    # 创建模型实例并移动到指定设备
     model = MLP(dropout=Config.DROPOUT).to(device)
     
-    # 加载权重
-    if os.path.exists(model_path):
-        state_dict = torch.load(model_path, map_location=device)
-        model.load_state_dict(state_dict)
-        print(f"成功加载模型权重: {model_path}")
-    else:
+    # 检查并加载模型权重
+    if not os.path.exists(model_path):
         raise FileNotFoundError(f"模型文件不存在: {model_path}")
     
+    state_dict = torch.load(model_path, map_location=device)
+    model.load_state_dict(state_dict)
+    print(f"✓ 成功加载模型权重: {model_path}")
+    
+    # 设置为评估模式（关闭dropout等训练特性）
     model.eval()
     return model
 
@@ -112,32 +146,44 @@ def load_test_images(test_dir: str = "data/test", num_samples: int = 4) -> List[
     return images_with_labels
 
 
-def predict_images(model: nn.Module, images: List[Tuple[str, int, Image.Image]], 
-                   transform: transforms.Compose, device: torch.device) -> List[Tuple[int, int, float]]:
+def predict_images(model: nn.Module, 
+                   images: List[Tuple[str, int, Image.Image]], 
+                   transform: transforms.Compose, 
+                   device: torch.device) -> List[Tuple[int, int, float]]:
     """
-    对图片进行预测
+    对图片进行批量预测
+    
+    对输入的图片列表进行预处理，然后使用MLP模型进行预测，
+    返回预测标签、真实标签和对应的置信度。
     
     Args:
-        model: MLP模型
-        images: [(图片路径, 真实标签, PIL图片对象), ...]
-        transform: 数据预处理变换
-        device: 计算设备
+        model: 已加载的MLP模型（应处于eval模式）
+        images: 图片列表，格式为 [(图片路径, 真实标签, PIL图片对象), ...]
+        transform: 数据预处理变换（应与训练时保持一致）
+        device: 计算设备（CPU或GPU）
         
     Returns:
-        [(真实标签, 预测标签, 置信度), ...]
+        预测结果列表，格式为 [(真实标签, 预测标签, 置信度), ...]
+        置信度为预测类别的softmax概率值
     """
     results = []
     
+    # 禁用梯度计算以节省内存和加速推理
     with torch.no_grad():
         for img_path, true_label, pil_img in images:
-            # 预处理图片
+            # 应用预处理变换：转换为张量、标准化等
             img_tensor = transform(pil_img).unsqueeze(0).to(device)
             
-            # 预测
+            # 模型前向传播，获取logits
             output = model(img_tensor)
+            
+            # 计算softmax概率分布
             probabilities = torch.nn.functional.softmax(output, dim=1)
+            
+            # 获取最大概率值和对应的类别索引
             confidence, predicted = torch.max(probabilities, 1)
             
+            # 转换为Python标量
             pred_label = predicted.item()
             conf = confidence.item()
             
@@ -148,93 +194,162 @@ def predict_images(model: nn.Module, images: List[Tuple[str, int, Image.Image]],
 
 def visualize_predictions(images: List[Tuple[str, int, Image.Image]], 
                          results: List[Tuple[int, int, float]],
-                         save_path: str = "predictions_visualization.png"):
+                         save_path: str = "predictions_visualization.png") -> None:
     """
-    以2x2形式可视化预测结果（新风格）
+    以简洁大气的2x2网格形式可视化预测结果
+    
+    采用极简设计风格，白色背景，清晰的层次结构和配色方案。
     
     Args:
-        images: [(图片路径, 真实标签, PIL图片对象), ...]
-        results: [(真实标签, 预测标签, 置信度), ...]
-        save_path: 保存路径
+        images: 图片列表，格式为 [(图片路径, 真实标签, PIL图片对象), ...]
+        results: 预测结果列表，格式为 [(真实标签, 预测标签, 置信度), ...]
+        save_path: 保存路径，默认为 "predictions_visualization.png"
     """
-    fig, axes = plt.subplots(2, 2, figsize=(12, 12), facecolor='#f8f9fa')
-    fig.suptitle('MLP-Fashion-MNIST', fontsize=20, fontweight='bold', 
-                 color='#212529', y=0.97)
+    config = VisualizationConfig
     
+    # 创建图形和子图
+    fig, axes = plt.subplots(
+        *config.GRID_SIZE, 
+        figsize=config.FIGURE_SIZE, 
+        facecolor=config.BACKGROUND_COLOR
+    )
+    axes = axes.flatten() if config.GRID_SIZE[0] * config.GRID_SIZE[1] > 1 else [axes]
+    
+    # 设置主标题
+    fig.suptitle(
+        'MLP Model Predictions on Fashion-MNIST', 
+        fontsize=config.TITLE_FONT_SIZE, 
+        fontweight='bold',
+        color=config.TEXT_COLOR,
+        y=0.98
+    )
+    
+    # 遍历每张图片和对应的预测结果
     for idx, ((img_path, true_label, pil_img), (true, pred, conf)) in enumerate(zip(images, results)):
-        row = idx // 2
-        col = idx % 2
-        ax = axes[row, col]
+        ax = axes[idx]
         
+        # 判断预测是否正确
         is_correct = (true == pred)
-        # 蓝色表示正确，红色表示错误
-        border_color = '#3498db' if is_correct else '#e74c3c'
-        bg_color = '#ebf5fb' if is_correct else '#fadbd8'
-        text_color = '#2980b9' if is_correct else '#c0392b'
-        status_text = '✓' if is_correct else '✗'
         
-        ax.set_facecolor('#ffffff')
-        ax.imshow(pil_img, cmap='gray', aspect='auto')
+        # 根据预测结果选择颜色
+        border_color = config.CORRECT_COLOR if is_correct else config.ERROR_COLOR
+        status_symbol = '✓' if is_correct else '✗'
+        
+        # 设置子图背景为白色
+        ax.set_facecolor(config.BACKGROUND_COLOR)
+        
+        # 显示图片
+        ax.imshow(pil_img, cmap='gray', aspect='equal', interpolation='bilinear')
         ax.axis('off')
         
-        # 更粗的边框
-        for spine in ax.spines.values():
-            spine.set_edgecolor(border_color)
-            spine.set_linewidth(5)
+        # 添加简洁的边框（仅在底部和右侧）
+        for spine_name, spine in ax.spines.items():
+            if spine_name in ['bottom', 'right']:
+                spine.set_color(border_color)
+                spine.set_linewidth(config.BORDER_WIDTH)
+                spine.set_visible(True)
+            else:
+                spine.set_visible(False)
         
-        # 信息显示在图片上方
-        title_text = f'Pred: {pred}  Target: {true}  {status_text}'
-        ax.set_title(title_text, fontsize=13, fontweight='bold', 
-                    color=text_color, pad=8)
+        # 添加预测信息（简洁的文本标签）
+        # 上方显示：Pred | Target
+        info_text = f'Pred: {pred}  |  Target: {true}  {status_symbol}'
+        ax.text(
+            0.5, 1.05, 
+            info_text, 
+            transform=ax.transAxes,
+            fontsize=config.SUBTITLE_FONT_SIZE,
+            fontweight='600',
+            color=config.TEXT_COLOR,
+            ha='center',
+            va='bottom'
+        )
         
-        # 置信度显示在图片下方
-        conf_text = f'Confidence: {conf:.1%}'
-        ax.text(0.5, -0.08, conf_text, transform=ax.transAxes, 
-               fontsize=10, color='#7f8c8d', ha='center', va='top')
+        # 下方显示：置信度
+        conf_text = f'{conf:.1%}'
+        ax.text(
+            0.5, -0.08,
+            conf_text,
+            transform=ax.transAxes,
+            fontsize=config.CONFIDENCE_FONT_SIZE,
+            color=config.SUBTEXT_COLOR,
+            ha='center',
+            va='top'
+        )
     
-    plt.tight_layout(rect=[0, 0, 1, 0.96])
-    plt.savefig(save_path, dpi=150, bbox_inches='tight', facecolor='#f8f9fa')
+    # 调整布局并保存
+    plt.tight_layout(rect=[0, 0.02, 1, 0.97])
+    plt.savefig(
+        save_path, 
+        dpi=config.DPI, 
+        bbox_inches='tight', 
+        facecolor=config.BACKGROUND_COLOR,
+        edgecolor='none'
+    )
     plt.close()
     print(f"可视化结果已保存到: {save_path}")
 
 
-def main():
-    """主函数"""
-    # 使用系统时间作为随机种子
+def main() -> None:
+    """
+    主函数：执行完整的预测和可视化流程
+    
+    流程包括：
+    1. 设置随机种子（基于系统时间）
+    2. 初始化计算设备
+    3. 加载MLP模型权重
+    4. 从测试集中随机选择图片
+    5. 进行预测
+    6. 统计并打印准确率
+    7. 生成可视化结果
+    """
+    print("=" * 60)
+    print("MLP Fashion-MNIST 预测可视化")
+    print("=" * 60)
+    
+    # 使用系统时间作为随机种子，确保每次运行结果不同
     seed = int(time.time())
     random.seed(seed)
     torch.manual_seed(seed)
     print(f"随机种子: {seed}")
     
-    # 设置设备
+    # 自动检测并使用可用的计算设备
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"使用设备: {device}")
+    print(f"计算设备: {device}")
     
-    # 加载模型
-    print("\n正在加载MLP模型...")
+    # 步骤1：加载预训练模型
+    print("\n[步骤 1/4] 加载MLP模型...")
     model_path = "models/mlp_pytorch.pt"
     model = load_mlp_model(model_path, device)
     
-    # 准备数据变换
+    # 步骤2：准备数据预处理管道
+    print("\n[步骤 2/4] 准备数据预处理...")
     transform = get_data_transforms()
     
-    # 从测试集中随机选择4张图片
-    print("\n正在从测试集中加载图片...")
-    test_images = load_test_images("data/test", num_samples=4)
-    print(f"成功加载 {len(test_images)} 张图片")
+    # 步骤3：从测试集中随机采样图片
+    print("\n[步骤 3/4] 从测试集加载图片...")
+    num_samples = VisualizationConfig.GRID_SIZE[0] * VisualizationConfig.GRID_SIZE[1]
+    test_images = load_test_images("data/test", num_samples=num_samples)
+    print(f"✓ 成功加载 {len(test_images)} 张图片")
     
-    # 进行预测
-    print("\n正在进行预测...")
+    # 步骤4：进行预测
+    print("\n[步骤 4/4] 执行预测...")
     predictions = predict_images(model, test_images, transform, device)
     
-    # 统计准确率
+    # 统计并打印预测准确率
     correct = sum(1 for true, pred, _ in predictions if true == pred)
-    accuracy = correct / len(predictions)
-    print(f"\n本次预测准确率: {accuracy:.2%} ({correct}/{len(predictions)})")
+    total = len(predictions)
+    accuracy = correct / total if total > 0 else 0.0
+    print(f"\n预测统计:")
+    print(f"  正确: {correct}/{total}")
+    print(f"  准确率: {accuracy:.2%}")
     
-    # 可视化结果
-    print("\n正在生成可视化...")
+    # 生成并保存可视化结果
+    print("\n生成可视化结果...")
     visualize_predictions(test_images, predictions, save_path="predictions_visualization.png")
+    
+    print("\n完成！")
+    print("=" * 60)
 
 
 if __name__ == "__main__":
